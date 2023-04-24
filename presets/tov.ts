@@ -1,129 +1,165 @@
 import { resolve } from 'path'
+import { env } from './shared/env'
 import Vue from '@vitejs/plugin-vue'
-import Prism from 'markdown-it-prism'
-import Markdown from 'vite-plugin-md'
-import Pages from 'vite-plugin-pages'
 import Icons from 'unplugin-icons/vite'
 import Inspect from 'vite-plugin-inspect'
-import Watcher from 'vite-plugin-watcher'
+import Markdown from './plugins/markdown'
 import Windicss from 'vite-plugin-windicss'
 import vueJsx from '@vitejs/plugin-vue-jsx'
-import ViteRestart from 'vite-plugin-restart'
-import Layouts from 'vite-plugin-vue-layouts'
-import I18n from '@intlify/vite-plugin-vue-i18n'
+import Rmovelog from 'vite-plugin-removelog'
 import { viteMockServe } from 'vite-plugin-mock'
+import VueRouter from 'unplugin-vue-router/vite'
+import Layouts from 'vite-plugin-vue-meta-layouts'
 import AutoImport from 'unplugin-auto-import/vite'
 import IconsResolver from 'unplugin-icons/resolver'
 import Components from 'unplugin-vue-components/vite'
 import viteCompression from 'vite-plugin-compression'
+import { markdownWrapperClasses } from './plugins/markdown'
+import { VueRouterAutoImports } from 'unplugin-vue-router'
+import I18N from '@intlify/unplugin-vue-i18n/vite'
 
-import {
-	dirResolver,
-	DirResolverHelper
-} from 'vite-auto-import-resolvers'
 import {
 	ArcoResolver,
+	IduxResolver,
+	VantResolver,
+	DevUiResolver,
+	QuasarResolver,
+	ViewUiResolver,
+	InklineResolver,
+	TDesignResolver,
 	NaiveUiResolver,
-	AntDesignVueResolver,
+	Vuetify3Resolver,
+	VarletUIResolver,
+	LayuiVueResolver,
+	PrimeVueResolver,
+	HeadlessUiResolver,
 	ElementPlusResolver,
-	VueUseComponentsResolver
+	AntDesignVueResolver,
+	VueUseComponentsResolver,
 } from 'unplugin-vue-components/resolvers'
-import { restart } from './shared/restart'
-import OptimizationPersist from 'vite-plugin-optimize-persist'
-import PkgConfig from 'vite-plugin-package-config'
-
-const markdownWrapperClasses =
-	'prose md:prose-lg lg:prose-lg dark:prose-invert text-left p-10 prose-slate prose-img:rounded-xl prose-headings:underline prose-a:text-blue-600'
+import Modules from 'vite-plugin-use-modules'
+import { GenerateTitle } from './plugins/html'
+// @ts-ignore
+import VueMarcos from 'unplugin-vue-macros/vite'
+import { warmup } from 'vite-plugin-warmup'
+import { AutoImportResolvers, normalizeResolvers } from './shared/resolvers'
 
 export default () => {
 	return [
-		// 将包信息文件作为 vite 的配置文件之一，为 vite-plugin-optimize-persist 所用
-		PkgConfig(),
-		// 依赖预构建分析，提高大型项目性能
-		OptimizationPersist(),
+		// https://github.com/bluwy/vite-plugin-warmup (依赖预热，加快渲染，未来可能会内置到 vite 中)
+		warmup({
+			clientFiles: ['./src/**/*'],
+		}),
+		// https://github.com/sxzz/unplugin-vue-macros/blob/main/README-zh-CN.md
+		VueMarcos({
+			hoistStatic: true,
+			defineOptions: true,
+		}),
+		// https://github.com/posva/unplugin-vue-router
+		VueRouter({
+			routesFolder: 'src/pages',
+			extensions: ['.md', '.vue', '.tsx'],
+			dts: 'presets/types/type-router.d.ts',
+		}),
+		// 模块自动加载
+		Modules({
+			auto: true,
+		}),
+		// 生成 title
+		GenerateTitle(),
 		// vue 官方插件，用来解析 sfc
 		Vue({
-			include: [/\.vue$/, /\.md$/]
+			include: [/\.vue$/, /\.md$/],
 		}),
 		// markdown 编译插件
-		Markdown({
-			wrapperClasses: markdownWrapperClasses,
-			markdownItSetup(md) {
-				md.use(Prism)
-			}
-		}),
-		// 文件路由
-		Pages({
-			extensions: ['vue', 'md', 'tsx']
-		}),
+		Markdown(),
 		// 布局系统
 		Layouts(),
-		// layouts 目录下文件新增重启
-		// fix: vite-plugin-vue-layouts 在dev Server时新建报错问题
-		Watcher(w => {
-			w.add('./src/layouts')
-			w.on('add', restart)
-		}),
 		// 调试工具
-		Inspect(),
+		Inspect({
+			enabled: env.VITE_APP_INSPECT,
+		}),
 		// windicss 插件
 		Windicss({
-			safelist: markdownWrapperClasses
+			safelist: markdownWrapperClasses,
 		}),
 		// mock 服务
-		viteMockServe(),
+		viteMockServe({
+			prodEnabled: env.VITE_APP_MOCK_IN_PRODUCTION,
+		}),
 		// https://icones.netlify.app/
 		Icons({
-			autoInstall: true
+			autoInstall: true,
 		}),
 		// 组件自动按需引入
 		Components({
-			extensions: ['vue', 'md', 'tsx'],
-			include: [/\.md$/, /\.vue$/, /\.tsx$/],
+			extensions: ['md', 'vue', 'tsx'],
 			dts: resolve(__dirname, './types/components.d.ts'),
-			resolvers: [
-				ArcoResolver(),
-				IconsResolver(),
-				NaiveUiResolver(),
-				ElementPlusResolver(),
-				AntDesignVueResolver(),
-				VueUseComponentsResolver()
-			]
-		}),
-		// 目录下 api 按需自动引入辅助插件
-		DirResolverHelper(),
-		// api 自动按需引入
-		AutoImport({
-			dts: './presets/types/auto-imports.d.ts',
-			imports: [
-				'vue',
-				'pinia',
-				'vue-i18n',
-				'vue-router',
-				'@vueuse/core'
+			types: [
+				{
+					from: 'vue-router',
+					names: ['RouterLink', 'RouterView'],
+				},
 			],
-			resolvers: [
-				ElementPlusResolver(),
-				dirResolver({ prefix: 'use' }),
-				dirResolver({
-					target: 'stores',
-					suffix: 'Store'
-				})
-			]
+			resolvers: normalizeResolvers({
+				onlyExist: [
+					[VantResolver(), 'vant'],
+					[QuasarResolver(), 'quasar'],
+					[DevUiResolver(), 'vue-devui'],
+					[NaiveUiResolver(), 'naive-ui'],
+					[Vuetify3Resolver(), 'vuetify'],
+					[PrimeVueResolver(), 'primevue'],
+					[ViewUiResolver(), 'view-design'],
+					[LayuiVueResolver(), 'layui-vue'],
+					[VarletUIResolver(), '@varlet/ui'],
+					[IduxResolver(), '@idux/components'],
+					[TDesignResolver(), 'tdesign-vue-next'],
+					[InklineResolver(), '@inkline/inkline'],
+					[ElementPlusResolver(), 'element-plus'],
+					[HeadlessUiResolver(), '@headlessui/vue'],
+					[ArcoResolver(), '@arco-design/web-vue'],
+					[AntDesignVueResolver(), 'ant-design-vue'],
+					[VueUseComponentsResolver(), '@vueuse/components'],
+				],
+				include: [IconsResolver()],
+			}),
 		}),
+		// api 自动按需引入
+		env.VITE_APP_API_AUTO_IMPORT &&
+			AutoImport({
+				dirs: [
+					env.VITE_APP_API_AUTO_IMPORT && 'src/stores/**/*.ts',
+					env.VITE_APP_API_AUTO_IMPORT && 'src/composables/**/*.ts',
+				],
+				dts: './presets/types/auto-imports.d.ts',
+				imports: [
+					'vue',
+					'pinia',
+					'vue-i18n',
+					'@vueuse/core',
+					VueRouterAutoImports,
+				],
+				resolvers: AutoImportResolvers,
+				eslintrc: {
+					enabled: true,
+					globalsPropValue: true,
+					filepath: 'presets/eslint/.eslintrc-auto-import.json',
+				},
+			}),
 		// i18n 国际化支持
-		I18n({
-			runtimeOnly: true,
+		I18N({
+			runtimeOnly: false,
 			compositionOnly: true,
-			include: [resolve(__dirname, '../locales/**')]
-		}),
-		// 预设热重启服务
-		ViteRestart({
-			restart: ['presets/tov.[jt]s', 'presets/shared/**/*']
+			include: [resolve(__dirname, '../locales/**')],
 		}),
 		// tsx 支持
 		vueJsx(),
 		// 生产环境资源压缩
-		viteCompression()
+		viteCompression({
+			// @ts-ignore
+			algorithm: env.VITE_APP_COMPRESSINON_ALGORITHM,
+		}),
+		// 生产环境下移除 console.log, console.warn, console.error
+		Rmovelog(),
 	]
 }
